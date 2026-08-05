@@ -8,7 +8,7 @@ public class PlayerCombatSystem : MonoBehaviour
     [SerializeField] private Transform downAttackPoint;
     [SerializeField] private float attackRange = 0.8f;
     [SerializeField] private LayerMask enemyLayer;
-    [SerializeField] private float attackRate = 3.5f; // จำนวนครั้งต่อวินาที
+    [SerializeField] private float attackRate = 3.5f;
 
     [Header("Damage Settings")]
     [SerializeField] private int baseDamage = 15;
@@ -25,6 +25,9 @@ public class PlayerCombatSystem : MonoBehaviour
     private float nextAttackTime = 0f;
     private int comboStep = 0;
 
+    // Fixed pre-allocated array for low overhead in Unity 6
+    private readonly Collider2D[] hitEnemiesBuffer = new Collider2D[10];
+
     private void Awake()
     {
         controller = GetComponent<PlayerController2D>();
@@ -32,24 +35,21 @@ public class PlayerCombatSystem : MonoBehaviour
 
     private void Update()
     {
-        // Toggle Pure Flame Infusion (กด F เพื่อเปิด/ปิดโหมดไฟบริสุทธิ์)
         if (Input.GetKeyDown(KeyCode.F))
         {
             ToggleFlameInfusion();
         }
 
-        // Drain Flame Energy เมื่อเปิดโหมด
         if (isFlameInfused)
         {
             currentFlameEnergy -= flameEnergyCostPerSec * Time.deltaTime;
             if (currentFlameEnergy <= 0f)
             {
                 currentFlameEnergy = 0f;
-                isFlameInfused = false; // พลังหมด ปิดโหมดอัตโนมัติ
+                isFlameInfused = false;
             }
         }
 
-        // Attack Inputs (กด J หรือ คลิกซ้าย เพื่อฟัน)
         if (Time.time >= nextAttackTime)
         {
             if (Input.GetButtonDown("Fire1") || Input.GetKeyDown(KeyCode.J))
@@ -70,43 +70,36 @@ public class PlayerCombatSystem : MonoBehaviour
         }
         else if (verticalInput < 0 && !GetComponent<Collider2D>().IsTouchingLayers(LayerMask.GetMask("Ground")))
         {
-            // ฟันลงลอยกลางอากาศ (Down Attack / Pogo)
             AttackDown();
         }
         else
         {
-            // Normal / Combo Attack
             AttackDirection(attackPoint, $"Attack_Combo_{comboStep + 1}");
-            comboStep = (comboStep + 1) % 3; // สลับ Combo 1 -> 2 -> 3
+            comboStep = (comboStep + 1) % 3;
         }
     }
 
     private void AttackDirection(Transform point, string attackAnimName)
     {
-        // TODO: สั่งเล่น Animation ตามชื่อ attackAnimName (ส่งให้ Animator)
-        
-        Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(point.position, attackRange, enemyLayer);
+        int hitCount = Physics2D.OverlapCircleNonAlloc(point.position, attackRange, hitEnemiesBuffer, enemyLayer);
         int finalDamage = baseDamage + (isFlameInfused ? flameDamageBonus : 0);
 
-        foreach (Collider2D enemy in hitEnemies)
+        for (int i = 0; i < hitCount; i++)
         {
-            Debug.Log($"Hit {enemy.name} for {finalDamage} damage! (Flame Mode: {isFlameInfused})");
-            // enemy.GetComponent<EnemyHealth>()?.TakeDamage(finalDamage);
+            Debug.Log($"Hit {hitEnemiesBuffer[i].name} for {finalDamage} damage! (Flame Mode: {isFlameInfused})");
         }
     }
 
     private void AttackDown()
     {
-        Collider2D[] hitTargets = Physics2D.OverlapCircleAll(downAttackPoint.position, attackRange, enemyLayer);
-        int finalDamage = baseDamage + (isFlameInfused ? flameDamageBonus : 0);
+        int hitCount = Physics2D.OverlapCircleNonAlloc(downAttackPoint.position, attackRange, hitEnemiesBuffer, enemyLayer);
 
-        if (hitTargets.Length > 0)
+        if (hitCount > 0)
         {
-            foreach (Collider2D target in hitTargets)
+            for (int i = 0; i < hitCount; i++)
             {
-                Debug.Log($"Pogo Hit {target.name}!");
+                Debug.Log($"Pogo Hit {hitEnemiesBuffer[i].name}!");
             }
-            // Pogo Bounce: เด้งตัว Scarlet ขึ้นกลางอากาศเมื่อฟันโดน
             controller.Bounce(pogoBounceForce);
         }
     }
@@ -116,7 +109,7 @@ public class PlayerCombatSystem : MonoBehaviour
         if (currentFlameEnergy > 10f)
         {
             isFlameInfused = !isFlameInfused;
-            Debug.Log($"Pure Flame Infusion: {isFlameInfused}");
+            Debug.Log($"Pure Flame Infusion State: {isFlameInfused}");
         }
     }
 

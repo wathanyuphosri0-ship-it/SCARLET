@@ -11,7 +11,8 @@ public class PlayerController2D : MonoBehaviour
 
     [Header("Jump Settings")]
     [SerializeField] private float jumpForce = 16f;
-    [SerializeField] private float jumpCutMultiplier = 0.5f; // ชะลอเมื่อปล่อยปุ่ม jump เร็ว
+    [SerializeField] private int maxJumps = 2; // จำกัดไว้ที่ Double Jump (2 ครั้ง)
+    [SerializeField] private float jumpCutMultiplier = 0.5f;
     [SerializeField] private float coyoteTime = 0.15f;
     [SerializeField] private float jumpBufferTime = 0.15f;
     [SerializeField] private float gravityScale = 3.5f;
@@ -33,7 +34,7 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] private Vector2 wallCheckSize = new Vector2(0.1f, 1.2f);
     [SerializeField] private LayerMask groundLayer;
 
-    // Components & States
+    // Components & Internal States
     private Rigidbody2D rb;
     private float horizontalInput;
     private bool isFacingRight = true;
@@ -41,10 +42,14 @@ public class PlayerController2D : MonoBehaviour
     // Timers & Flags
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
+    private int jumpsRemaining; // ตัวนับจำนวนครั้งที่กระโดดได้ที่เหลืออยู่
     private bool isDashing;
     private bool canDash = true;
     private bool isWallSliding;
     private bool isWallJumping;
+
+    // Allocation-free physics buffers for Unity 6
+    private readonly Collider2D[] wallOverlapResults = new Collider2D[2];
 
     public bool IsFacingRight => isFacingRight;
     public bool IsDashing => isDashing;
@@ -53,6 +58,7 @@ public class PlayerController2D : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         rb.gravityScale = gravityScale;
+        jumpsRemaining = maxJumps;
     }
 
     private void Update()
@@ -62,22 +68,23 @@ public class PlayerController2D : MonoBehaviour
         // Input Handling
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
-        // Ground & Wall Check
+        // Physics check
         bool isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0f, groundLayer);
-        bool isTouchingWall = Physics2D.OverlapBox(wallCheck.position, wallCheckSize, 0f, groundLayer);
+        bool isTouchingWall = Physics2D.OverlapBoxNonAlloc(wallCheck.position, wallCheckSize, 0f, wallOverlapResults, groundLayer) > 0;
 
-        // Coyote Time
+        // Coyote Time & Jump Reset Logic
         if (isGrounded)
         {
             coyoteTimeCounter = coyoteTime;
-            canDash = true; // รีเซ็ต Dash เมื่อแตะพื้น
+            jumpsRemaining = maxJumps; // รีเซ็ตเป็น 2 เมื่อแตะพื้น
+            canDash = true;
         }
         else
         {
             coyoteTimeCounter -= Time.deltaTime;
         }
 
-        // Jump Buffer
+        // Jump Buffer Logic
         if (Input.GetButtonDown("Jump"))
         {
             jumpBufferCounter = jumpBufferTime;
@@ -87,20 +94,29 @@ public class PlayerController2D : MonoBehaviour
             jumpBufferCounter -= Time.deltaTime;
         }
 
-        // Execute Jump
-        if (jumpBufferCounter > 0f && coyoteTimeCounter > 0f)
+        // Execute Jump (เช็กจำนวนครั้งที่เหลือแบบเด็ดขาด)
+        if (jumpBufferCounter > 0f && jumpsRemaining > 0)
         {
-            Jump();
+            // ถ้าไม่อยู่บนพื้นและหมดเวลา Coyote Time ให้หักสิทธิ์การโดดกลางอากาศ
+            if (!isGrounded && coyoteTimeCounter <= 0f && jumpsRemaining == maxJumps)
+            {
+                jumpsRemaining--; // หักสิทธิ์การโดดครั้งแรกที่ร่วงขอบพื้น
+            }
+
+            if (jumpsRemaining > 0)
+            {
+                Jump();
+            }
         }
 
-        // Variable Jump Height (กดค้างโดดสูง กดแป๊บเดียวโดดเตี้ย)
-        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0f)
+        // Variable Jump Height
+        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
         {
-            rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * jumpCutMultiplier);
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier);
             coyoteTimeCounter = 0f;
         }
 
-        // Dash Input
+        // Dash Trigger
         if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
         {
             StartCoroutine(PerformDash());
@@ -110,23 +126,22 @@ public class PlayerController2D : MonoBehaviour
         if (isTouchingWall && !isGrounded && horizontalInput != 0f)
         {
             isWallSliding = true;
-            rb.velocity = new Vector2(rb.velocity.x, Mathf.Clamp(rb.velocity.y, -wallSlideSpeed, float.MaxValue));
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -wallSlideSpeed, float.MaxValue));
         }
         else
         {
             isWallSliding = false;
         }
 
-        // Wall Jump
+        // Wall Jump Trigger
         if (Input.GetButtonDown("Jump") && isWallSliding)
         {
             WallJump();
         }
 
-        // Dynamic Gravity Adjustments
         ApplyGravityAdjustments();
 
-        // Flip Character
+        // Direction Flip
         if (!isWallJumping)
         {
             if (horizontalInput > 0 && !isFacingRight) Flip();
@@ -138,27 +153,28 @@ public class PlayerController2D : MonoBehaviour
     {
         if (isDashing || isWallJumping) return;
 
-        // Movement with smooth Acceleration/Deceleration
+        // Velocity Force Calculation
         float targetSpeed = horizontalInput * moveSpeed;
-        float speedDif = targetSpeed - rb.velocity.x;
+        float speedDif = targetSpeed - rb.linearVelocity.x;
         float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : deceleration;
         float movement = speedDif * accelRate;
 
         rb.AddForce(movement * Vector2.right, ForceMode2D.Force);
     }
-
     private void Jump()
     {
-        rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        jumpsRemaining--; // ลดจำนวนการกระโดดลงทันที
         jumpBufferCounter = 0f;
-        coyoteTimeCounter = 0f;
+        coyoteTimeCounter = 0f; // เคลียร์ Coyote Time ทันทีเพื่อไม่ให้โดดซ้ำซ้อน
     }
 
     private void WallJump()
     {
         isWallJumping = true;
         float jumpDir = isFacingRight ? -1f : 1f;
-        rb.velocity = new Vector2(jumpDir * wallJumpForce.x, wallJumpForce.y);
+        rb.linearVelocity = new Vector2(jumpDir * wallJumpForce.x, wallJumpForce.y);
+        jumpsRemaining = maxJumps - 1; // Wall Jump นับเป็นกระโดดครั้งแรก
         jumpBufferCounter = 0f;
 
         Invoke(nameof(StopWallJump), 0.15f);
@@ -174,7 +190,7 @@ public class PlayerController2D : MonoBehaviour
         rb.gravityScale = 0f;
 
         float dashDir = isFacingRight ? 1f : -1f;
-        rb.velocity = new Vector2(dashDir * dashSpeed, 0f);
+        rb.linearVelocity = new Vector2(dashDir * dashSpeed, 0f);
 
         yield return new WaitForSeconds(dashDuration);
 
@@ -187,7 +203,7 @@ public class PlayerController2D : MonoBehaviour
 
     private void ApplyGravityAdjustments()
     {
-        if (rb.velocity.y < 0)
+        if (rb.linearVelocity.y < 0)
             rb.gravityScale = gravityScale * fallGravityMultiplier;
         else
             rb.gravityScale = gravityScale;
@@ -201,15 +217,24 @@ public class PlayerController2D : MonoBehaviour
         transform.localScale = scale;
     }
 
-    // ฟังก์ชันสำหรับ Pogoing (เรียกใช้เมื่อฟันลงโดนศัตรู/หนาม)
     public void Bounce(float bounceForce)
     {
-        rb.velocity = new Vector2(rb.velocity.x, bounceForce);
+        rb.linearVelocity = new Vector2(rb.linearVelocity.x, bounceForce);
+        jumpsRemaining = maxJumps - 1; // คืนสิทธิ์การทำ Double Jump กลางอากาศหลัง Pogoing
     }
 
     private void OnDrawGizmosSelected()
     {
-        if (groundCheck) Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
-        if (wallCheck) Gizmos.DrawWireCube(wallCheck.position, wallCheckSize);
+        if (groundCheck != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireCube(groundCheck.position, groundCheckSize);
+        }
+
+        if (wallCheck != null)
+        {
+            Gizmos.color = Color.blue;
+            Gizmos.DrawWireCube(wallCheck.position, wallCheckSize);
+        }
     }
 }
