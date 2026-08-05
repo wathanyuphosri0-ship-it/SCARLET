@@ -6,20 +6,15 @@ public class HitboxTrigger : MonoBehaviour
     [SerializeField] private bool isDownHitbox = false;
     [SerializeField] private LayerMask enemyLayer;
 
-    private Collider2D col;
-
-    private void Awake()
-    {
-        col = GetComponent<Collider2D>();
-    }
-
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // ตรวจสอบว่าวัตถุที่ชนอยู่ใน Layer ศัตรูหรือไม่
         if (((1 << other.gameObject.layer) & enemyLayer) != 0)
         {
             int damage = combatSystem.CurrentDamage;
             Debug.Log($"<color=red>[Hit Success] โจมตีโดน {other.name} ดาเมจ: {damage}</color>");
+
+            // เติมพลังงานไฟเพิ่มเมื่อฟันโดนศัตรู
+            combatSystem.AddEnergyOnHit();
 
             if (isDownHitbox)
             {
@@ -30,13 +25,12 @@ public class HitboxTrigger : MonoBehaviour
         }
     }
 
-    // วาดขอบเขต Hitbox สีแดงสว่างในหน้า Scene เมื่อ Hitbox ถูกเปิดใช้งาน
     private void OnDrawGizmos()
     {
         Collider2D myCol = GetComponent<Collider2D>();
         if (myCol == null) return;
 
-        Gizmos.color = new Color(1f, 0f, 0f, 0.6f); // สีแดงโปร่งแสง
+        Gizmos.color = new Color(1f, 0f, 0f, 0.6f);
 
         if (myCol is BoxCollider2D box)
         {
