@@ -1,13 +1,15 @@
+using System.Collections;
 using UnityEngine;
 
 public class PlayerCombatSystem : MonoBehaviour
 {
+    [Header("Hitbox Colliders")]
+    [SerializeField] private Collider2D forwardHitbox;
+    [SerializeField] private Collider2D upHitbox;
+    [SerializeField] private Collider2D downHitbox;
+    [SerializeField] private float hitboxActiveTime = 0.1f; // ระยะเวลาที่เปิด Hitbox ค้างไว้ต่อการฟัน 1 ครั้ง
+
     [Header("Attack Settings")]
-    [SerializeField] private Transform attackPoint;
-    [SerializeField] private Transform upAttackPoint;
-    [SerializeField] private Transform downAttackPoint;
-    [SerializeField] private float attackRange = 0.8f;
-    [SerializeField] private LayerMask enemyLayer;
     [SerializeField] private float attackRate = 3.5f;
 
     [Header("Damage Settings")]
@@ -19,22 +21,24 @@ public class PlayerCombatSystem : MonoBehaviour
     [SerializeField] private bool isFlameInfused = false;
     [SerializeField] private float flameEnergyCostPerSec = 5f;
     [SerializeField] private float currentFlameEnergy = 100f;
-    [SerializeField] private float maxFlameEnergy = 100f;
 
     private PlayerController2D controller;
     private float nextAttackTime = 0f;
     private int comboStep = 0;
 
-    // Fixed pre-allocated array for low overhead in Unity 6
-    private readonly Collider2D[] hitEnemiesBuffer = new Collider2D[10];
+    public int CurrentDamage => baseDamage + (isFlameInfused ? flameDamageBonus : 0);
 
     private void Awake()
     {
         controller = GetComponent<PlayerController2D>();
+
+        // ปิด Hitbox ทุกตัวไว้ก่อนเริ่มเกม
+        DisableAllHitboxes();
     }
 
     private void Update()
     {
+        // Toggle Pure Flame Mode
         if (Input.GetKeyDown(KeyCode.F))
         {
             ToggleFlameInfusion();
@@ -50,6 +54,7 @@ public class PlayerCombatSystem : MonoBehaviour
             }
         }
 
+        // Attack Input
         if (Time.time >= nextAttackTime)
         {
             if (Input.GetButtonDown("Fire1") || Input.GetKeyDown(KeyCode.J))
@@ -66,42 +71,46 @@ public class PlayerCombatSystem : MonoBehaviour
 
         if (verticalInput > 0)
         {
-            AttackDirection(upAttackPoint, "AttackUp");
+            Debug.Log("<color=cyan>[Combat] โจมตีทิศทาง: บน (UP ATTACK)</color>");
+            StartCoroutine(ActivateHitboxRoutine(upHitbox));
         }
         else if (verticalInput < 0 && !GetComponent<Collider2D>().IsTouchingLayers(LayerMask.GetMask("Ground")))
         {
-            AttackDown();
+            Debug.Log("<color=yellow>[Combat] โจมตีทิศทาง: ล่าง (DOWN ATTACK / POGO)</color>");
+            StartCoroutine(ActivateHitboxRoutine(downHitbox));
         }
         else
         {
-            AttackDirection(attackPoint, $"Attack_Combo_{comboStep + 1}");
-            comboStep = (comboStep + 1) % 3;
+            comboStep = (comboStep % 3) + 1;
+            Debug.Log($"<color=green>[Combat] โจมตีทิศทาง: หน้า (FORWARD ATTACK - Combo {comboStep})</color>");
+            StartCoroutine(ActivateHitboxRoutine(forwardHitbox));
         }
     }
 
-    private void AttackDirection(Transform point, string attackAnimName)
+    private IEnumerator ActivateHitboxRoutine(Collider2D targetHitbox)
     {
-        int hitCount = Physics2D.OverlapCircleNonAlloc(point.position, attackRange, hitEnemiesBuffer, enemyLayer);
-        int finalDamage = baseDamage + (isFlameInfused ? flameDamageBonus : 0);
+        if (targetHitbox == null) yield break;
 
-        for (int i = 0; i < hitCount; i++)
-        {
-            Debug.Log($"Hit {hitEnemiesBuffer[i].name} for {finalDamage} damage! (Flame Mode: {isFlameInfused})");
-        }
+        // เปิดใช้งาน Hitbox
+        targetHitbox.enabled = true;
+
+        // รอตามระยะเวลาที่กำหนดให้ Hitbox ทำงาน
+        yield return new WaitForSeconds(hitboxActiveTime);
+
+        // ปิดการใช้งาน Hitbox
+        targetHitbox.enabled = false;
     }
 
-    private void AttackDown()
+    private void DisableAllHitboxes()
     {
-        int hitCount = Physics2D.OverlapCircleNonAlloc(downAttackPoint.position, attackRange, hitEnemiesBuffer, enemyLayer);
+        if (forwardHitbox) forwardHitbox.enabled = false;
+        if (upHitbox) upHitbox.enabled = false;
+        if (downHitbox) downHitbox.enabled = false;
+    }
 
-        if (hitCount > 0)
-        {
-            for (int i = 0; i < hitCount; i++)
-            {
-                Debug.Log($"Pogo Hit {hitEnemiesBuffer[i].name}!");
-            }
-            controller.Bounce(pogoBounceForce);
-        }
+    public void TriggerPogoBounce()
+    {
+        controller.Bounce(pogoBounceForce);
     }
 
     private void ToggleFlameInfusion()
@@ -111,12 +120,5 @@ public class PlayerCombatSystem : MonoBehaviour
             isFlameInfused = !isFlameInfused;
             Debug.Log($"Pure Flame Infusion State: {isFlameInfused}");
         }
-    }
-
-    private void OnDrawGizmosSelected()
-    {
-        if (attackPoint) Gizmos.DrawWireSphere(attackPoint.position, attackRange);
-        if (upAttackPoint) Gizmos.DrawWireSphere(upAttackPoint.position, attackRange);
-        if (downAttackPoint) Gizmos.DrawWireSphere(downAttackPoint.position, attackRange);
     }
 }
