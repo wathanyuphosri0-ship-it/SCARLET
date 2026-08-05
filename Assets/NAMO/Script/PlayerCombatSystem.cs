@@ -3,11 +3,11 @@ using UnityEngine;
 
 public class PlayerCombatSystem : MonoBehaviour
 {
-    [Header("Hitbox Colliders")]
-    [SerializeField] private Collider2D forwardHitbox;
-    [SerializeField] private Collider2D upHitbox;
-    [SerializeField] private Collider2D downHitbox;
-    [SerializeField] private float hitboxActiveTime = 0.1f; // ระยะเวลาที่เปิด Hitbox ค้างไว้ต่อการฟัน 1 ครั้ง
+    [Header("Hitbox GameObjects")]
+    [SerializeField] private GameObject forwardHitbox;
+    [SerializeField] private GameObject upHitbox;
+    [SerializeField] private GameObject downHitbox;
+    [SerializeField] private float hitboxActiveTime = 0.2f; // ขยายเวลาให้เห็นชัดขึ้นเล็กน้อย (0.2 วินาที)
 
     [Header("Attack Settings")]
     [SerializeField] private float attackRate = 3.5f;
@@ -31,14 +31,11 @@ public class PlayerCombatSystem : MonoBehaviour
     private void Awake()
     {
         controller = GetComponent<PlayerController2D>();
-
-        // ปิด Hitbox ทุกตัวไว้ก่อนเริ่มเกม
         DisableAllHitboxes();
     }
 
     private void Update()
     {
-        // Toggle Pure Flame Mode
         if (Input.GetKeyDown(KeyCode.F))
         {
             ToggleFlameInfusion();
@@ -54,7 +51,6 @@ public class PlayerCombatSystem : MonoBehaviour
             }
         }
 
-        // Attack Input
         if (Time.time >= nextAttackTime)
         {
             if (Input.GetButtonDown("Fire1") || Input.GetKeyDown(KeyCode.J))
@@ -68,6 +64,9 @@ public class PlayerCombatSystem : MonoBehaviour
     private void PerformAttack()
     {
         float verticalInput = Input.GetAxisRaw("Vertical");
+
+        // ปิด Hitbox ตัวเก่าก่อนเปิดตัวใหม่
+        DisableAllHitboxes();
 
         if (verticalInput > 0)
         {
@@ -87,25 +86,22 @@ public class PlayerCombatSystem : MonoBehaviour
         }
     }
 
-    private IEnumerator ActivateHitboxRoutine(Collider2D targetHitbox)
+    private IEnumerator ActivateHitboxRoutine(GameObject targetHitbox)
     {
         if (targetHitbox == null) yield break;
 
-        // เปิดใช้งาน Hitbox
-        targetHitbox.enabled = true;
+        targetHitbox.SetActive(true); // เปิด GameObject ของ Hitbox
 
-        // รอตามระยะเวลาที่กำหนดให้ Hitbox ทำงาน
         yield return new WaitForSeconds(hitboxActiveTime);
 
-        // ปิดการใช้งาน Hitbox
-        targetHitbox.enabled = false;
+        targetHitbox.SetActive(false); // ปิดเมื่อหมดเวลา
     }
 
     private void DisableAllHitboxes()
     {
-        if (forwardHitbox) forwardHitbox.enabled = false;
-        if (upHitbox) upHitbox.enabled = false;
-        if (downHitbox) downHitbox.enabled = false;
+        if (forwardHitbox) forwardHitbox.SetActive(false);
+        if (upHitbox) upHitbox.SetActive(false);
+        if (downHitbox) downHitbox.SetActive(false);
     }
 
     public void TriggerPogoBounce()
