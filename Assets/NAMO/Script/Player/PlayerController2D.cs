@@ -5,7 +5,8 @@ using UnityEngine;
 public class PlayerController2D : MonoBehaviour
 {
     [Header("Movement Settings")]
-    [SerializeField] private float moveSpeed = 9f;
+    [SerializeField] private float baseMoveSpeed = 9f;
+    private float moveSpeed;
     [SerializeField] private float acceleration = 60f;
     [SerializeField] private float deceleration = 60f;
 
@@ -38,6 +39,7 @@ public class PlayerController2D : MonoBehaviour
     private Rigidbody2D rb;
     private float horizontalInput;
     private bool isFacingRight = true;
+    private bool isOverheated = false;
 
     // Timers & Flags
     private float coyoteTimeCounter;
@@ -52,8 +54,8 @@ public class PlayerController2D : MonoBehaviour
 
     public bool IsFacingRight => isFacingRight;
     public bool IsDashing => isDashing;
+    public bool IsOverheated => isOverheated;
 
-    // --- เพิ่ม Method เช็คแตะพื้นสำหรับสคริปต์อื่น ---
     public bool IsGrounded()
     {
         if (groundCheck == null) return false;
@@ -65,6 +67,7 @@ public class PlayerController2D : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         rb.gravityScale = gravityScale;
         jumpsRemaining = maxJumps;
+        moveSpeed = baseMoveSpeed;
     }
 
     private void Update()
@@ -155,6 +158,35 @@ public class PlayerController2D : MonoBehaviour
 
         rb.AddForce(movement * Vector2.right, ForceMode2D.Force);
     }
+
+    #region Speed Buff & Overheat Methods
+
+    public void ApplySpeedBuff(float multiplier)
+    {
+        moveSpeed = baseMoveSpeed * multiplier;
+    }
+
+    public void RemoveSpeedBuff()
+    {
+        moveSpeed = baseMoveSpeed;
+    }
+
+    public void ApplyOverheatPenalty(float duration, float slowMultiplier)
+    {
+        StartCoroutine(OverheatRoutine(duration, slowMultiplier));
+    }
+
+    private IEnumerator OverheatRoutine(float duration, float slowMultiplier)
+    {
+        isOverheated = true;
+        moveSpeed = baseMoveSpeed * slowMultiplier; // ช้าลง
+        yield return new WaitForSeconds(duration);
+        moveSpeed = baseMoveSpeed; // กลับเป็นความเร็วปกติ
+        isOverheated = false;
+        Debug.Log("<color=green>[OVERHEAT END] หายจากอาการ Overheat แล้ว!</color>");
+    }
+
+    #endregion
 
     private void Jump()
     {
