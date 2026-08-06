@@ -38,13 +38,13 @@ public class PlayerHealth : MonoBehaviour
             spriteRenderer = GetComponentInChildren<SpriteRenderer>();
         }
         playerController = GetComponent<PlayerController2D>();
+
     }
 
     private void Start()
     {
         currentHealth = maxHealth;
     }
-
     /// <summary>
     /// ฟังก์ชันรับความเสียหาย (Take Damage)
     /// </summary>
@@ -71,6 +71,7 @@ public class PlayerHealth : MonoBehaviour
             StartCoroutine(ApplyKnockbackRoutine(knockbackDirection));
             StartCoroutine(InvincibilityRoutine());
         }
+        CameraController2D.Instance?.TriggerShake(0.2f, 0.4f);
     }
 
     /// <summary>

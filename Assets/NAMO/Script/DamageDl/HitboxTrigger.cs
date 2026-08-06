@@ -41,6 +41,7 @@ public class HitboxTrigger : MonoBehaviour
                 }
             }
         }
+        CameraController2D.Instance?.TriggerShake(0.1f, 0.2f);
     }
 
     private void OnDrawGizmos()
@@ -61,4 +62,5 @@ public class HitboxTrigger : MonoBehaviour
             Gizmos.DrawSphere(circle.offset, circle.radius);
         }
     }
+    
 }

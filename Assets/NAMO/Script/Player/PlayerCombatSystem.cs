@@ -103,6 +103,7 @@ public class PlayerCombat : MonoBehaviour
                 nextAttackTime = Time.time + (1f / attackRate);
             }
         }
+
     }
 
     private void ActivatePureFlameMode()
@@ -144,6 +145,7 @@ public class PlayerCombat : MonoBehaviour
         {
             Debug.Log($"<color=yellow>[SKILL FAILED] ❌ เกจไม่พอ!</color>");
         }
+        CameraController2D.Instance?.TriggerShake(0.25f, 0.5f);
     }
 
     private void PerformAttack()
