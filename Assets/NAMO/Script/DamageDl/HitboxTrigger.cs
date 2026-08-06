@@ -6,25 +6,37 @@ public class HitboxTrigger : MonoBehaviour
     [SerializeField] private bool isDownHitbox = false;
     [SerializeField] private LayerMask enemyLayer;
 
+    private void Awake()
+    {
+        if (combat == null)
+        {
+            combat = GetComponentInParent<PlayerCombat>();
+        }
+    }
+
     private void OnTriggerEnter2D(Collider2D other)
     {
-        // ตรวจสอบว่า GameObject อยู่ใน Layer ที่กำหนดไว้หรือไม่
         if (((1 << other.gameObject.layer) & enemyLayer) != 0)
         {
-            // ตรวจหา BaseEnemy เพื่อทำดาเมจ
             BaseEnemy enemy = other.GetComponent<BaseEnemy>();
             if (enemy != null)
             {
-                enemy.TakeDamage(1, transform.position); // ทำดาเมจใส่ศัตรู
-                Debug.Log($"<color=red>[Hit Success] โจมตีโดน {other.name}</color>");
+                int damage = combat != null ? combat.CurrentDamage : 1;
+                enemy.TakeDamage(damage, transform.position);
 
-                // ถ้าเป็น Hitbox ด้านล่าง ให้เรียกระบบ Pogo Bounce (เด้งตัว)
+                if (combat != null)
+                {
+                    combat.AddFlameEnergyOnHit();
+                }
+
+                Debug.Log($"<color=red>[Hit Success] โจมตีโดน {other.name} (Damage: {damage})</color>");
+
                 if (isDownHitbox)
                 {
                     PlayerController2D playerCtrl = combat != null ? combat.GetComponent<PlayerController2D>() : GetComponentInParent<PlayerController2D>();
                     if (playerCtrl != null)
                     {
-                        playerCtrl.Bounce(14f); // แรงเด้งขึ้นฟ้า
+                        playerCtrl.Bounce(14f);
                     }
                 }
             }

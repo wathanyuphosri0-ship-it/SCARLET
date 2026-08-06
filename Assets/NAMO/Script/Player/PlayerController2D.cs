@@ -35,13 +35,11 @@ public class PlayerController2D : MonoBehaviour
     [SerializeField] private Vector2 wallCheckSize = new Vector2(0.1f, 1.2f);
     [SerializeField] private LayerMask groundLayer;
 
-    // Components & Internal States
     private Rigidbody2D rb;
     private float horizontalInput;
     private bool isFacingRight = true;
     private bool isOverheated = false;
 
-    // Timers & Flags
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
     private int jumpsRemaining;
@@ -90,53 +88,31 @@ public class PlayerController2D : MonoBehaviour
             coyoteTimeCounter -= Time.deltaTime;
         }
 
-        if (Input.GetButtonDown("Jump"))
-        {
-            jumpBufferCounter = jumpBufferTime;
-        }
-        else
-        {
-            jumpBufferCounter -= Time.deltaTime;
-        }
+        if (Input.GetButtonDown("Jump")) jumpBufferCounter = jumpBufferTime;
+        else jumpBufferCounter -= Time.deltaTime;
 
         if (jumpBufferCounter > 0f && jumpsRemaining > 0)
         {
-            if (!grounded && coyoteTimeCounter <= 0f && jumpsRemaining == maxJumps)
-            {
-                jumpsRemaining--;
-            }
-
-            if (jumpsRemaining > 0)
-            {
-                Jump();
-            }
+            if (!grounded && coyoteTimeCounter <= 0f && jumpsRemaining == maxJumps) jumpsRemaining--;
+            if (jumpsRemaining > 0) Jump();
         }
 
-        if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
+        if (Input.GetButtonUp("Jump") && GetVelocityY() > 0f)
         {
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier);
+            SetVelocity(GetVelocityX(), GetVelocityY() * jumpCutMultiplier);
             coyoteTimeCounter = 0f;
         }
 
-        if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
-        {
-            StartCoroutine(PerformDash());
-        }
+        if (Input.GetKeyDown(KeyCode.LeftShift) && canDash) StartCoroutine(PerformDash());
 
         if (isTouchingWall && !grounded && horizontalInput != 0f)
         {
             isWallSliding = true;
-            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -wallSlideSpeed, float.MaxValue));
+            SetVelocity(GetVelocityX(), Mathf.Clamp(GetVelocityY(), -wallSlideSpeed, float.MaxValue));
         }
-        else
-        {
-            isWallSliding = false;
-        }
+        else isWallSliding = false;
 
-        if (Input.GetButtonDown("Jump") && isWallSliding)
-        {
-            WallJump();
-        }
+        if (Input.GetButtonDown("Jump") && isWallSliding) WallJump();
 
         ApplyGravityAdjustments();
 
@@ -152,45 +128,30 @@ public class PlayerController2D : MonoBehaviour
         if (isDashing || isWallJumping) return;
 
         float targetSpeed = horizontalInput * moveSpeed;
-        float speedDif = targetSpeed - rb.linearVelocity.x;
+        float speedDif = targetSpeed - GetVelocityX();
         float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : deceleration;
         float movement = speedDif * accelRate;
 
         rb.AddForce(movement * Vector2.right, ForceMode2D.Force);
     }
 
-    #region Speed Buff & Overheat Methods
-
-    public void ApplySpeedBuff(float multiplier)
-    {
-        moveSpeed = baseMoveSpeed * multiplier;
-    }
-
-    public void RemoveSpeedBuff()
-    {
-        moveSpeed = baseMoveSpeed;
-    }
-
-    public void ApplyOverheatPenalty(float duration, float slowMultiplier)
-    {
-        StartCoroutine(OverheatRoutine(duration, slowMultiplier));
-    }
+    public void ApplySpeedBuff(float multiplier) => moveSpeed = baseMoveSpeed * multiplier;
+    public void RemoveSpeedBuff() => moveSpeed = baseMoveSpeed;
+    public void ApplyOverheatPenalty(float duration, float slowMultiplier) => StartCoroutine(OverheatRoutine(duration, slowMultiplier));
 
     private IEnumerator OverheatRoutine(float duration, float slowMultiplier)
     {
         isOverheated = true;
-        moveSpeed = baseMoveSpeed * slowMultiplier; // ช้าลง
+        moveSpeed = baseMoveSpeed * slowMultiplier;
         yield return new WaitForSeconds(duration);
-        moveSpeed = baseMoveSpeed; // กลับเป็นความเร็วปกติ
+        moveSpeed = baseMoveSpeed;
         isOverheated = false;
-        Debug.Log("<color=green>[OVERHEAT END] หายจากอาการ Overheat แล้ว!</color>");
+        Debug.Log("<color=green>[OVERHEAT END] หายจาก Overheat แล้ว!</color>");
     }
-
-    #endregion
 
     private void Jump()
     {
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+        SetVelocity(GetVelocityX(), jumpForce);
         jumpsRemaining--;
         jumpBufferCounter = 0f;
         coyoteTimeCounter = 0f;
@@ -200,7 +161,7 @@ public class PlayerController2D : MonoBehaviour
     {
         isWallJumping = true;
         float jumpDir = isFacingRight ? -1f : 1f;
-        rb.linearVelocity = new Vector2(jumpDir * wallJumpForce.x, wallJumpForce.y);
+        SetVelocity(jumpDir * wallJumpForce.x, wallJumpForce.y);
         jumpsRemaining = maxJumps - 1;
         jumpBufferCounter = 0f;
 
@@ -217,7 +178,7 @@ public class PlayerController2D : MonoBehaviour
         rb.gravityScale = 0f;
 
         float dashDir = isFacingRight ? 1f : -1f;
-        rb.linearVelocity = new Vector2(dashDir * dashSpeed, 0f);
+        SetVelocity(dashDir * dashSpeed, 0f);
 
         yield return new WaitForSeconds(dashDuration);
 
@@ -230,10 +191,8 @@ public class PlayerController2D : MonoBehaviour
 
     private void ApplyGravityAdjustments()
     {
-        if (rb.linearVelocity.y < 0)
-            rb.gravityScale = gravityScale * fallGravityMultiplier;
-        else
-            rb.gravityScale = gravityScale;
+        if (GetVelocityY() < 0) rb.gravityScale = gravityScale * fallGravityMultiplier;
+        else rb.gravityScale = gravityScale;
     }
 
     private void Flip()
@@ -246,9 +205,14 @@ public class PlayerController2D : MonoBehaviour
 
     public void Bounce(float bounceForce)
     {
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, bounceForce);
+        SetVelocity(GetVelocityX(), bounceForce);
         jumpsRemaining = maxJumps - 1;
     }
+
+    // Helper methods รองรับทั้ง Unity รุ่นใหม่ (linearVelocity) และรุ่นเก่า (velocity)
+    private float GetVelocityX() => rb.velocity.x;
+    private float GetVelocityY() => rb.velocity.y;
+    private void SetVelocity(float x, float y) => rb.velocity = new Vector2(x, y);
 
     private void OnDrawGizmosSelected()
     {

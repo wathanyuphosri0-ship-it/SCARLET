@@ -8,7 +8,7 @@ public class PlayerCombat : MonoBehaviour
     [SerializeField] private GameObject sideHitbox;
     [SerializeField] private GameObject upHitbox;
     [SerializeField] private GameObject downHitbox;
-    [SerializeField] private GameObject flameBurstHitbox; // Hitbox ระเบิดพลังไฟรอบตัว
+    [SerializeField] private GameObject flameBurstHitbox;
     [SerializeField] private float hitboxActiveTime = 0.15f;
 
     [Header("Attack Settings")]
@@ -22,25 +22,27 @@ public class PlayerCombat : MonoBehaviour
 
     [Header("Pure Flame Gauge Settings")]
     [SerializeField] private float maxFlameEnergy = 100f;
-    [SerializeField] private float currentFlameEnergy = 100f; // เริ่มต้น 100 สำหรับทดสอบ
-    [SerializeField] private float flameDrainRate = 5f; // ลด 5 ต่อ 1 วินาที
+    [SerializeField] private float currentFlameEnergy = 100f;
+    [SerializeField] private float flameDrainRate = 5f;
+    [SerializeField] private float flameRegenRate = 8f;
+    [SerializeField] private float energyGainOnHit = 10f;
     [SerializeField] private KeyCode pureFlameKey = KeyCode.F;
-    [SerializeField] private KeyCode flameSkillKey = KeyCode.E; // ปุ่มใช้สกิล (กด E)
-    [SerializeField] private float skillEnergyCost = 30f; // ใช้ 30 เกจ
+    [SerializeField] private KeyCode flameSkillKey = KeyCode.E;
+    [SerializeField] private float skillEnergyCost = 30f;
 
     [Header("Pure Flame Buffs")]
-    [SerializeField] private float flameModeDamageMultiplier = 1.8f; // ตีแรงขึ้น x1.8
-    [SerializeField] private float moveSpeedBuffMultiplier = 1.35f;  // เดินเร็วขึ้น x1.35
+    [SerializeField] private float flameModeDamageMultiplier = 1.8f;
+    [SerializeField] private float moveSpeedBuffMultiplier = 1.35f;
 
-    private bool isPureFlameMode = false;
+    private bool isFlameActive = false;
     private float nextAttackTime = 0f;
     private PlayerController2D playerController;
     private Rigidbody2D rb;
 
     public float CurrentFlameEnergy => currentFlameEnergy;
     public float MaxFlameEnergy => maxFlameEnergy;
-    public int CurrentDamage => Mathf.RoundToInt(baseAttackDamage * (isPureFlameMode ? flameModeDamageMultiplier : 1f));
-    public bool IsPureFlameMode => isPureFlameMode;
+    public int CurrentDamage => Mathf.RoundToInt(baseAttackDamage * (isFlameActive ? flameModeDamageMultiplier : 1f));
+    public bool IsPureFlameMode => isFlameActive;
 
     private void Awake()
     {
@@ -51,46 +53,48 @@ public class PlayerCombat : MonoBehaviour
 
     private void Update()
     {
-        // 1. สลับเปิด/ปิด Pure Flame Mode (ปุ่ม F)
         if (Input.GetKeyDown(pureFlameKey))
         {
-            if (!isPureFlameMode && currentFlameEnergy > 0 && !playerController.IsOverheated)
+            if (!isFlameActive && currentFlameEnergy > 0 && !playerController.IsOverheated)
             {
                 ActivatePureFlameMode();
             }
-            else if (isPureFlameMode)
+            else if (isFlameActive)
             {
-                DeactivatePureFlameMode(false); // ปิดเองโดยผู้เล่น
+                DeactivatePureFlameMode(false);
             }
         }
 
-        // 2. ระบบลดเกจไฟทีละ 5 ต่อวินาที (ขณะเปิดโหมด)
-        if (isPureFlameMode)
+        if (isFlameActive)
         {
             currentFlameEnergy -= flameDrainRate * Time.deltaTime;
             currentFlameEnergy = Mathf.Clamp(currentFlameEnergy, 0f, maxFlameEnergy);
 
-            // หากปล่อยให้เกจหมดเอง -> เกิด Overheat
             if (currentFlameEnergy <= 0f)
             {
-                DeactivatePureFlameMode(true); // ปล่อยหมดเอง = Overheat!
+                DeactivatePureFlameMode(true);
             }
 
-            // 3. ปุ่มกดใช้สกิลระเบิดไฟรอบตัว (ปุ่ม E)
             if (Input.GetKeyDown(flameSkillKey))
             {
                 UseFlameBurstSkill();
             }
         }
+        else
+        {
+            if (currentFlameEnergy < maxFlameEnergy)
+            {
+                currentFlameEnergy += flameRegenRate * Time.deltaTime;
+                currentFlameEnergy = Mathf.Clamp(currentFlameEnergy, 0f, maxFlameEnergy);
+            }
+        }
 
-        // 4. เช็ครีเซ็ต Combo
         if (Time.time - lastAttackTime > comboResetTime && currentComboStep != 1)
         {
             currentComboStep = 1;
-            Debug.Log("<color=grey>[COMBO RESET] หมดเวลาคอมโบ! รีเซ็ตกลับเป็น Combo 1</color>");
+            Debug.Log("<color=grey>[COMBO RESET] หมดเวลาคอมโบ!</color>");
         }
 
-        // 5. การโจมตีปกติ
         if (Time.time >= nextAttackTime)
         {
             if (Input.GetButtonDown("Fire1") || Input.GetKeyDown(KeyCode.Z) || Input.GetKeyDown(KeyCode.J))
@@ -103,24 +107,24 @@ public class PlayerCombat : MonoBehaviour
 
     private void ActivatePureFlameMode()
     {
-        isPureFlameMode = true;
+        isFlameActive = true;
         playerController.ApplySpeedBuff(moveSpeedBuffMultiplier);
-        Debug.Log($"<color=orange><b>[PURE FLAME MODE] 💥 เปิดใช้งานโหมดไฟบริสุทธิ์! (Speed Buff x{moveSpeedBuffMultiplier} | Damage x{flameModeDamageMultiplier}) เกจคงเหลือ: {currentFlameEnergy:F1}/{maxFlameEnergy}</b></color>");
+        Debug.Log($"<color=orange>[PURE FLAME] 💥 เปิดโหมดไฟ! ({currentFlameEnergy:F1}/{maxFlameEnergy})</color>");
     }
 
     private void DeactivatePureFlameMode(bool isOverheated)
     {
-        isPureFlameMode = false;
+        isFlameActive = false;
         playerController.RemoveSpeedBuff();
 
         if (isOverheated)
         {
-            Debug.Log("<color=red><b>[OVERHEAT!] ⚠️ เกจไฟหมดถัง! เกิดอาการ Overheat เคลื่อนที่ช้าลง 2 วินาที!</b></color>");
-            playerController.ApplyOverheatPenalty(2f, 0.5f); // ช้าลง 50% เป็นเวลา 2 วินาที
+            Debug.Log("<color=red>[OVERHEAT!] ⚠️ เกจหมด ติด Overheat 2 วินาที!</color>");
+            playerController.ApplyOverheatPenalty(2f, 0.5f);
         }
         else
         {
-            Debug.Log("<color=cyan>[PURE FLAME MODE] ❄️ ปิดใช้งานโหมดไฟบริสุทธิ์ กลับสู่สถานะปกติ</color>");
+            Debug.Log("<color=cyan>[PURE FLAME] ❄️ ปิดโหมดไฟ</color>");
         }
     }
 
@@ -129,7 +133,7 @@ public class PlayerCombat : MonoBehaviour
         if (currentFlameEnergy >= skillEnergyCost)
         {
             currentFlameEnergy -= skillEnergyCost;
-            Debug.Log($"<color=red><b>[SKILL] 💥 Flame Burst! ระเบิดพลังไฟรอบตัว! (ใช้เกจ {skillEnergyCost} | เกจคงเหลือ: {currentFlameEnergy:F1}/{maxFlameEnergy})</b></color>");
+            Debug.Log($"<color=red>[SKILL] 💥 Flame Burst! (เหลือ: {currentFlameEnergy:F1}/{maxFlameEnergy})</color>");
 
             if (flameBurstHitbox != null)
             {
@@ -138,7 +142,7 @@ public class PlayerCombat : MonoBehaviour
         }
         else
         {
-            Debug.Log($"<color=yellow>[SKILL FAILED] ❌ เกจไฟไม่พอใช้สกิล! (ต้องการ {skillEnergyCost} | มีแค่ {currentFlameEnergy:F1})</color>");
+            Debug.Log($"<color=yellow>[SKILL FAILED] ❌ เกจไม่พอ!</color>");
         }
     }
 
@@ -150,17 +154,17 @@ public class PlayerCombat : MonoBehaviour
 
         if (verticalInput > 0.1f && upHitbox != null)
         {
-            Debug.Log($"<color=yellow>[ATTACK] 👆 โจมตีทิศทาง: UP (ดาเมจ: {CurrentDamage})</color>");
+            Debug.Log($"<color=yellow>[ATTACK] 👆 UP (DMG: {CurrentDamage})</color>");
             StartCoroutine(ActivateHitboxRoutine(upHitbox));
         }
         else if (verticalInput < -0.1f && !playerController.IsGrounded() && downHitbox != null)
         {
-            Debug.Log($"<color=yellow>[ATTACK] 👇 โจมตีทิศทาง: DOWN / POGO (ดาเมจ: {CurrentDamage})</color>");
+            Debug.Log($"<color=yellow>[ATTACK] 👇 DOWN (DMG: {CurrentDamage})</color>");
             StartCoroutine(ActivateHitboxRoutine(downHitbox));
         }
         else if (sideHitbox != null)
         {
-            Debug.Log($"<color=red>[ATTACK] ⚔️ โจมตีทิศทาง: SIDE (Combo Step: {currentComboStep}/3 | ดาเมจ: {CurrentDamage})</color>");
+            Debug.Log($"<color=red>[ATTACK] ⚔️ SIDE (Combo: {currentComboStep}/3 | DMG: {CurrentDamage})</color>");
             StartCoroutine(ActivateHitboxRoutine(sideHitbox));
             currentComboStep = (currentComboStep % 3) + 1;
         }
@@ -181,10 +185,9 @@ public class PlayerCombat : MonoBehaviour
         if (flameBurstHitbox != null) flameBurstHitbox.SetActive(false);
     }
 
-    // ฟังก์ชันสำหรับเติมเกจไฟเมื่อฟันโดนศัตรู
-    public void AddFlameEnergy(float amount)
+    public void AddFlameEnergyOnHit()
     {
-        currentFlameEnergy = Mathf.Clamp(currentFlameEnergy + amount, 0f, maxFlameEnergy);
-        Debug.Log($"<color=orange>[ENERGY RECOVER] +{amount} Flame Energy (ปัจจุบัน: {currentFlameEnergy:F1}/{maxFlameEnergy})</color>");
+        currentFlameEnergy = Mathf.Clamp(currentFlameEnergy + energyGainOnHit, 0f, maxFlameEnergy);
+        Debug.Log($"<color=orange>[HIT RECOVER] +{energyGainOnHit} Energy ({currentFlameEnergy:F1}/{maxFlameEnergy})</color>");
     }
 }
