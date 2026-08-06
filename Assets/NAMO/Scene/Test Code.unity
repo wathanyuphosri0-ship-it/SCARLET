@@ -195,7 +195,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03f6130af76e2334c8ee4f1f65f2ee8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HitboxTrigger
-  combat: {fileID: 0}
+  combat: {fileID: 1606002953}
   isDownHitbox: 0
   enemyLayer:
     serializedVersion: 2
@@ -291,7 +291,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03f6130af76e2334c8ee4f1f65f2ee8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HitboxTrigger
-  combat: {fileID: 0}
+  combat: {fileID: 1606002953}
   isDownHitbox: 0
   enemyLayer:
     serializedVersion: 2
@@ -557,7 +557,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 03f6130af76e2334c8ee4f1f65f2ee8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HitboxTrigger
-  combat: {fileID: 0}
+  combat: {fileID: 1606002953}
   isDownHitbox: 1
   enemyLayer:
     serializedVersion: 2
@@ -1604,6 +1604,8 @@ MonoBehaviour:
   maxFlameEnergy: 100
   currentFlameEnergy: 100
   flameDrainRate: 5
+  flameRegenRate: 8
+  energyGainOnHit: 10
   pureFlameKey: 102
   flameSkillKey: 101
   skillEnergyCost: 30
