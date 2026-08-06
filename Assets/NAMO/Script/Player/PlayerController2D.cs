@@ -11,7 +11,7 @@ public class PlayerController2D : MonoBehaviour
 
     [Header("Jump Settings")]
     [SerializeField] private float jumpForce = 16f;
-    [SerializeField] private int maxJumps = 2; // จำกัดไว้ที่ Double Jump (2 ครั้ง)
+    [SerializeField] private int maxJumps = 2;
     [SerializeField] private float jumpCutMultiplier = 0.5f;
     [SerializeField] private float coyoteTime = 0.15f;
     [SerializeField] private float jumpBufferTime = 0.15f;
@@ -42,17 +42,23 @@ public class PlayerController2D : MonoBehaviour
     // Timers & Flags
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
-    private int jumpsRemaining; // ตัวนับจำนวนครั้งที่กระโดดได้ที่เหลืออยู่
+    private int jumpsRemaining;
     private bool isDashing;
     private bool canDash = true;
     private bool isWallSliding;
     private bool isWallJumping;
 
-    // Allocation-free physics buffers for Unity 6
     private readonly Collider2D[] wallOverlapResults = new Collider2D[2];
 
     public bool IsFacingRight => isFacingRight;
     public bool IsDashing => isDashing;
+
+    // --- เพิ่ม Method เช็คแตะพื้นสำหรับสคริปต์อื่น ---
+    public bool IsGrounded()
+    {
+        if (groundCheck == null) return false;
+        return Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0f, groundLayer);
+    }
 
     private void Awake()
     {
@@ -65,18 +71,15 @@ public class PlayerController2D : MonoBehaviour
     {
         if (isDashing) return;
 
-        // Input Handling
         horizontalInput = Input.GetAxisRaw("Horizontal");
 
-        // Physics check
-        bool isGrounded = Physics2D.OverlapBox(groundCheck.position, groundCheckSize, 0f, groundLayer);
+        bool grounded = IsGrounded();
         bool isTouchingWall = Physics2D.OverlapBoxNonAlloc(wallCheck.position, wallCheckSize, 0f, wallOverlapResults, groundLayer) > 0;
 
-        // Coyote Time & Jump Reset Logic
-        if (isGrounded)
+        if (grounded)
         {
             coyoteTimeCounter = coyoteTime;
-            jumpsRemaining = maxJumps; // รีเซ็ตเป็น 2 เมื่อแตะพื้น
+            jumpsRemaining = maxJumps;
             canDash = true;
         }
         else
@@ -84,7 +87,6 @@ public class PlayerController2D : MonoBehaviour
             coyoteTimeCounter -= Time.deltaTime;
         }
 
-        // Jump Buffer Logic
         if (Input.GetButtonDown("Jump"))
         {
             jumpBufferCounter = jumpBufferTime;
@@ -94,13 +96,11 @@ public class PlayerController2D : MonoBehaviour
             jumpBufferCounter -= Time.deltaTime;
         }
 
-        // Execute Jump (เช็กจำนวนครั้งที่เหลือแบบเด็ดขาด)
         if (jumpBufferCounter > 0f && jumpsRemaining > 0)
         {
-            // ถ้าไม่อยู่บนพื้นและหมดเวลา Coyote Time ให้หักสิทธิ์การโดดกลางอากาศ
-            if (!isGrounded && coyoteTimeCounter <= 0f && jumpsRemaining == maxJumps)
+            if (!grounded && coyoteTimeCounter <= 0f && jumpsRemaining == maxJumps)
             {
-                jumpsRemaining--; // หักสิทธิ์การโดดครั้งแรกที่ร่วงขอบพื้น
+                jumpsRemaining--;
             }
 
             if (jumpsRemaining > 0)
@@ -109,21 +109,18 @@ public class PlayerController2D : MonoBehaviour
             }
         }
 
-        // Variable Jump Height
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * jumpCutMultiplier);
             coyoteTimeCounter = 0f;
         }
 
-        // Dash Trigger
         if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
         {
             StartCoroutine(PerformDash());
         }
 
-        // Wall Slide Logic
-        if (isTouchingWall && !isGrounded && horizontalInput != 0f)
+        if (isTouchingWall && !grounded && horizontalInput != 0f)
         {
             isWallSliding = true;
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Clamp(rb.linearVelocity.y, -wallSlideSpeed, float.MaxValue));
@@ -133,7 +130,6 @@ public class PlayerController2D : MonoBehaviour
             isWallSliding = false;
         }
 
-        // Wall Jump Trigger
         if (Input.GetButtonDown("Jump") && isWallSliding)
         {
             WallJump();
@@ -141,7 +137,6 @@ public class PlayerController2D : MonoBehaviour
 
         ApplyGravityAdjustments();
 
-        // Direction Flip
         if (!isWallJumping)
         {
             if (horizontalInput > 0 && !isFacingRight) Flip();
@@ -153,7 +148,6 @@ public class PlayerController2D : MonoBehaviour
     {
         if (isDashing || isWallJumping) return;
 
-        // Velocity Force Calculation
         float targetSpeed = horizontalInput * moveSpeed;
         float speedDif = targetSpeed - rb.linearVelocity.x;
         float accelRate = (Mathf.Abs(targetSpeed) > 0.01f) ? acceleration : deceleration;
@@ -161,12 +155,13 @@ public class PlayerController2D : MonoBehaviour
 
         rb.AddForce(movement * Vector2.right, ForceMode2D.Force);
     }
+
     private void Jump()
     {
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-        jumpsRemaining--; // ลดจำนวนการกระโดดลงทันที
+        jumpsRemaining--;
         jumpBufferCounter = 0f;
-        coyoteTimeCounter = 0f; // เคลียร์ Coyote Time ทันทีเพื่อไม่ให้โดดซ้ำซ้อน
+        coyoteTimeCounter = 0f;
     }
 
     private void WallJump()
@@ -174,7 +169,7 @@ public class PlayerController2D : MonoBehaviour
         isWallJumping = true;
         float jumpDir = isFacingRight ? -1f : 1f;
         rb.linearVelocity = new Vector2(jumpDir * wallJumpForce.x, wallJumpForce.y);
-        jumpsRemaining = maxJumps - 1; // Wall Jump นับเป็นกระโดดครั้งแรก
+        jumpsRemaining = maxJumps - 1;
         jumpBufferCounter = 0f;
 
         Invoke(nameof(StopWallJump), 0.15f);
@@ -220,7 +215,7 @@ public class PlayerController2D : MonoBehaviour
     public void Bounce(float bounceForce)
     {
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, bounceForce);
-        jumpsRemaining = maxJumps - 1; // คืนสิทธิ์การทำ Double Jump กลางอากาศหลัง Pogoing
+        jumpsRemaining = maxJumps - 1;
     }
 
     private void OnDrawGizmosSelected()

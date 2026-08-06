@@ -2,26 +2,32 @@ using UnityEngine;
 
 public class HitboxTrigger : MonoBehaviour
 {
-    [SerializeField] private PlayerCombatSystem combatSystem;
+    [SerializeField] private PlayerCombat combat;
     [SerializeField] private bool isDownHitbox = false;
     [SerializeField] private LayerMask enemyLayer;
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        // ตรวจสอบว่า GameObject อยู่ใน Layer ที่กำหนดไว้หรือไม่
         if (((1 << other.gameObject.layer) & enemyLayer) != 0)
         {
-            int damage = combatSystem.CurrentDamage;
-            Debug.Log($"<color=red>[Hit Success] โจมตีโดน {other.name} ดาเมจ: {damage}</color>");
-
-            // เติมพลังงานไฟเพิ่มเมื่อฟันโดนศัตรู
-            combatSystem.AddEnergyOnHit();
-
-            if (isDownHitbox)
+            // ตรวจหา BaseEnemy เพื่อทำดาเมจ
+            BaseEnemy enemy = other.GetComponent<BaseEnemy>();
+            if (enemy != null)
             {
-                combatSystem.TriggerPogoBounce();
-            }
+                enemy.TakeDamage(1, transform.position); // ทำดาเมจใส่ศัตรู
+                Debug.Log($"<color=red>[Hit Success] โจมตีโดน {other.name}</color>");
 
-            // other.GetComponent<EnemyHealth>()?.TakeDamage(damage);
+                // ถ้าเป็น Hitbox ด้านล่าง ให้เรียกระบบ Pogo Bounce (เด้งตัว)
+                if (isDownHitbox)
+                {
+                    PlayerController2D playerCtrl = combat != null ? combat.GetComponent<PlayerController2D>() : GetComponentInParent<PlayerController2D>();
+                    if (playerCtrl != null)
+                    {
+                        playerCtrl.Bounce(14f); // แรงเด้งขึ้นฟ้า
+                    }
+                }
+            }
         }
     }
 
@@ -39,7 +45,8 @@ public class HitboxTrigger : MonoBehaviour
         }
         else if (myCol is CircleCollider2D circle)
         {
-            Gizmos.DrawSphere((Vector2)transform.position + circle.offset, circle.radius);
+            Gizmos.matrix = transform.localToWorldMatrix;
+            Gizmos.DrawSphere(circle.offset, circle.radius);
         }
     }
 }
